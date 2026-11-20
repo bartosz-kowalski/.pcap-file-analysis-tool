@@ -1,4 +1,5 @@
 #include "header_parser.h"
+
 #include <string.h>
 #include <stdlib.h>
 
@@ -16,11 +17,11 @@ int main(int argc, char **argv){
     char *image_fodler_name;
 
     if(argc < 2){
-        printf("You must include the name of the .PCAP file! \n");
+        perror("You must include the name of the .PCAP file! \n");
         return -1;
     }
     else if(argc > 4){
-        printf("Too many names given!");
+        perror("Too many names given! \n");
         return -1;
     }
     else{
@@ -46,14 +47,22 @@ int main(int argc, char **argv){
     FILE *pcap_file;
     pcap_file = fopen(pcap_filename, "rb");
     if(pcap_file == NULL){
-        printf("Unable to open the file! \n");
+        perror("Unable to open the file! \n");
         return -2;
     }
 
     header_data pcap_header_data;
-    is_header_valid(pcap_file, &pcap_header_data);
+    int valid = is_header_valid(pcap_file, &pcap_header_data);
+    if(valid != 0){
+        printf("ERROR \n");
+        return -1;
+    }
     printf("Magic number: %d, snaplen: %d, fcs: %d, linktype: %d \n", pcap_header_data.sec_micro, pcap_header_data.SnapLen, pcap_header_data.FCS, pcap_header_data.LinkType);
 
+    check_packet_no(pcap_file, &pcap_header_data);
+    printf("Number of packets: %d. \n", pcap_header_data.packet_no);
+
+    free(pcap_filename);
     fclose(pcap_file);
 
     return 0;
