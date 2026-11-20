@@ -16,5 +16,5 @@ build/program param1 param2 param3
 where:
 - param1 is the .pcap filename (with the extension!!!),
 - param2 is the output filename (without the .pdf extension),
-- param3 is the output image folder name.
+- param3 is the output image folder name. \
 Names should not contain neither spaces nor any spacial characters.
