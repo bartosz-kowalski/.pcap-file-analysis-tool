@@ -3,24 +3,25 @@
 int is_header_valid(FILE *pcap_file, header_data *data){
 
     int32_t file_data;
+    uint32_t magic_no_data;
     uint8_t fcs_data;
     uint16_t link_data;
     size_t check;
 
     // Reading the magic number
-    check = fread(&file_data, 4, 1, pcap_file);
+    check = fread(&magic_no_data, 4, 1, pcap_file);
     if(check != 1) {
-        printf("Unexpected end of file!");
+        printf("Unexpected end of file! \n");
         return -1;
     }
-    if(file_data == 0xA1B2C3D4){
+    if(magic_no_data == 0xA1B2C3D4){
         data->sec_micro = true;
     }
-    else if(file_data == 0xA1B23C4D){
+    else if(magic_no_data== 0xA1B23C4D){
         data->sec_micro = false;
     }
     else{
-        printf("Invalid header! Magic number cannot equal to %d!", file_data);
+        printf("Invalid header! Magic number cannot equal to %d! \n", magic_no_data);
         return -1;
     }
 
@@ -28,7 +29,7 @@ int is_header_valid(FILE *pcap_file, header_data *data){
     for(int i = 0; i < 2; i++){
         check = fread(&link_data, 2, 1, pcap_file);
         if(check != 1) {
-            printf("Unexpected end of file!");
+            printf("Unexpected end of file! \n");
             return -1;
         }
         if(link_data == 2 && i == 0){
@@ -38,7 +39,7 @@ int is_header_valid(FILE *pcap_file, header_data *data){
             continue;
         }
         else{
-            printf("Invalid version no.!");
+            printf("Invalid version no.! \n");
             return -1;
         }
     }
@@ -47,7 +48,7 @@ int is_header_valid(FILE *pcap_file, header_data *data){
     for(int i = 0; i < 2; i++){
         check = fread(&file_data, 4, 1, pcap_file);
         if(check != 1) {
-            printf("Unexpected end of file!");
+            printf("Unexpected end of file! \n");
             return -1;
         }
         continue;
@@ -56,7 +57,7 @@ int is_header_valid(FILE *pcap_file, header_data *data){
     // Reading the SnapLen
     check = fread(&file_data, 4, 1, pcap_file);
     if(check != 1) {
-        printf("Unexpected end of file!");
+        printf("Unexpected end of file! \n");
         return -1;
     }
     data->SnapLen = file_data;
@@ -64,7 +65,7 @@ int is_header_valid(FILE *pcap_file, header_data *data){
     // Reading the FCS and skipping unused bits
     check = fread(&fcs_data, 1, 1, pcap_file);
     if(check != 1) {
-        printf("Unexpected end of file!");
+        printf("Unexpected end of file! \n");
         return -1;
     }
     bool F = (fcs_data & 16) != 0;
@@ -79,17 +80,19 @@ int is_header_valid(FILE *pcap_file, header_data *data){
     // Skipiing unused byte
     check = fread(&fcs_data, 1, 1, pcap_file);
     if(check != 1) {
-        printf("Unexpected end of file!");
+        printf("Unexpected end of file! \n");
         return -1;
     }
 
     // Determining the link type
     check = fread(&link_data, 2, 1, pcap_file);
     if(check != 1) {
-        printf("Unexpected end of file!");
+        printf("Unexpected end of file! \n");
         return -1;
     }
     data->LinkType = link_data;
+
+    printf("Header of the file parsed correctly! \n");
 
     return 0;
 }

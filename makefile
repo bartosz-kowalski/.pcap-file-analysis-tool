@@ -8,13 +8,14 @@ OBJ = $(SRC:src/%.c=build/%.o)
 
 all: $(TARGET)
 
-$(TARGET): 
-	$(OBJ) $(CC) $(CFLAGS) $^ -o $@
+$(TARGET): $(OBJ)
+	 $(CC) $(CFLAGS) $^ -o $@
 
-build/%.o: 
-	src/%.c | build $(CC) $(CFLAGS) -c $< -o $@
+build/%.o: src/%.c 
+	@mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f build/%.o $(TARGET)
+	rm -f build/*.o $(TARGET)
 
 .PHONY: all clean
