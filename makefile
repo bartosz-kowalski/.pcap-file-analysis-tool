@@ -3,7 +3,7 @@ CFLAGS = -O2 -Iinclude -g -Wall -Wextra
 
 TARGET = build/program
 
-SRC = src/main.c src/header_parser.c 
+SRC = src/main.c src/header_parser.c src/packet_parser.c
 OBJ = $(SRC:src/%.c=build/%.o)
 
 all: $(TARGET)

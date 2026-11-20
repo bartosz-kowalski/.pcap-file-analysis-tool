@@ -1,4 +1,5 @@
 #include "header_parser.h"
+#include "packet_parser.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -12,9 +13,9 @@ int main(int argc, char **argv){
     Names MUST NOT contain spaces or any special characters
     */
 
-    char *pcap_filename;
-    char *output_filename;
-    char *image_fodler_name;
+    char *pcap_filename = NULL;
+    char *output_filename = NULL;
+    char *image_fodler_name = NULL;
 
     if(argc < 2){
         perror("You must include the name of the .PCAP file! \n");
@@ -44,17 +45,17 @@ int main(int argc, char **argv){
         }
     }
 
-    FILE *pcap_file;
+    FILE *pcap_file = NULL;
     pcap_file = fopen(pcap_filename, "rb");
     if(pcap_file == NULL){
         perror("Unable to open the file! \n");
-        return -2;
+        return -1;
     }
 
     header_data pcap_header_data;
     int valid = is_header_valid(pcap_file, &pcap_header_data);
     if(valid != 0){
-        printf("ERROR \n");
+        printf("ERROR IN THE HEADER! \n");
         return -1;
     }
     printf("Magic number: %d, snaplen: %d, fcs: %d, linktype: %d \n", pcap_header_data.sec_micro, pcap_header_data.SnapLen, pcap_header_data.FCS, pcap_header_data.LinkType);
@@ -62,7 +63,25 @@ int main(int argc, char **argv){
     check_packet_no(pcap_file, &pcap_header_data);
     printf("Number of packets: %d. \n", pcap_header_data.packet_no);
 
+    packet_data *pcap_packets = (packet_data*)malloc(pcap_header_data.packet_no * sizeof(packet_data));
+    for(int i = 0; i < pcap_header_data.packet_no; i++){
+        pcap_packets[i].data  = NULL;
+    }
+
+    valid = parse_packets(pcap_file, pcap_packets, pcap_header_data.packet_no);
+    if(valid != 0){
+        print("ERROR IN THE PACKETS! \n");
+        return -1;
+    }
+
+    for(int i = 0; i < pcap_header_data.packet_no; i++){
+        free(pcap_packets[i].data);
+    }
+
+    free(pcap_packets);
     free(pcap_filename);
+    free(output_filename);
+    free(image_fodler_name);
     fclose(pcap_file);
 
     return 0;
