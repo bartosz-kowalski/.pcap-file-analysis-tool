@@ -1,8 +1,13 @@
 #include "header_parser.h"
 #include "packet_parser.h"
+#include "ip_parser.h"
+#include "plotting.h"
+#include "utils.h"
 
 #include <string.h>
 #include <stdlib.h>
+
+#define NUM_BINS (200)
 
 int main(int argc, char **argv){
 
@@ -15,13 +20,13 @@ int main(int argc, char **argv){
 
     char *pcap_filename = NULL;
     char *output_filename = NULL;
-    char *image_fodler_name = NULL;
+    char *filemone = NULL;
 
     if(argc < 2){
         perror("You must include the name of the .PCAP file! \n");
         return -1;
     }
-    else if(argc > 4){
+    else if(argc > 3){
         perror("Too many names given! \n");
         return -1;
     }
@@ -36,12 +41,6 @@ int main(int argc, char **argv){
             size_t output_filename_len = strlen(argv[2]) + 1;
             output_filename = (char*)malloc(output_filename_len);
             memcpy(output_filename, argv[2], output_filename_len);
-        }
-
-        if(argc == 4){
-            size_t image_fodler_name_len = strlen(argv[3]) + 1;
-            image_fodler_name = (char*)malloc(image_fodler_name_len);
-            memcpy(image_fodler_name, argv[3], image_fodler_name_len);
         }
     }
 
@@ -60,29 +59,162 @@ int main(int argc, char **argv){
     }
     printf("Magic number: %d, snaplen: %d, fcs: %d, linktype: %d \n", pcap_header_data.sec_micro, pcap_header_data.SnapLen, pcap_header_data.FCS, pcap_header_data.LinkType);
 
-    check_packet_no(pcap_file, &pcap_header_data);
+    if (check_packet_no(pcap_file, &pcap_header_data) != 0){
+        printf("ERROR COUNTING PACKETS! \n");
+        return -1;
+    } 
     printf("Number of packets: %d. \n", pcap_header_data.packet_no);
 
     packet_data *pcap_packets = (packet_data*)malloc(pcap_header_data.packet_no * sizeof(packet_data));
-    for(int i = 0; i < pcap_header_data.packet_no; i++){
-        pcap_packets[i].data  = NULL;
+    for(uint32_t i = 0; i < pcap_header_data.packet_no; i++){
+        pcap_packets[i].ip_data  = NULL;
+        pcap_packets[i].raw_data = NULL;
+        pcap_packets[i].final_data = NULL;
     }
 
-    valid = parse_packets(pcap_file, pcap_packets, pcap_header_data.packet_no);
+    valid = parse_packets(pcap_file, pcap_packets, &pcap_header_data);
     if(valid != 0){
-        print("ERROR IN THE PACKETS! \n");
+        printf("ERROR IN THE PACKETS! \n");
         return -1;
     }
 
-    for(int i = 0; i < pcap_header_data.packet_no; i++){
-        free(pcap_packets[i].data);
+    for (uint32_t i = 0; i < pcap_header_data.packet_no; i++){
+        if (parse_ip_packet(&pcap_packets[i]) != 0) {
+            printf("ERROR: Failed to parse IP packet %u\n", i);
+            return -1;
+        }
+    }
+
+    uint32_t tcp_packet_no = 0;
+    uint32_t udp_packet_no = 0;
+    uint32_t other_packet_no = 0;
+
+    uint32_t fin_tcp_no = 0;
+    uint32_t ack_tcp_no = 0;
+    uint32_t rst_tcp_no = 0;
+    uint32_t syn_tcp_no = 0;
+    uint32_t psh_tcp_no = 0;
+
+    uint64_t avg_tcp_sz = 0;
+    uint64_t avg_udp_sz = 0;
+    uint64_t avg_pack_size = 0;
+
+    // throughput data 
+    double t_first = get_packet_time(&pcap_packets[0], pcap_header_data.sec_micro);
+    double t_last  = get_packet_time(&pcap_packets[pcap_header_data.packet_no - 1], pcap_header_data.sec_micro);
+    double total_duration = t_last - t_first;
+    if (total_duration <= 0.0) total_duration = 1e-6;
+    uint32_t num_bins = pcap_header_data.packet_no / 3;
+    if (num_bins < 10) num_bins = 10;
+    if (num_bins > 100) num_bins = 100;
+    double bin_width = total_duration / num_bins;
+    double *bin_times = calloc(num_bins, sizeof(double));
+    double *throughput = calloc(num_bins, sizeof(double));
+    for (uint32_t b = 0; b < num_bins; b++) {
+        bin_times[b] = (b + 0.5) * bin_width;
+    }
+
+    uint32_t max_pack_size = 0;
+    uint32_t min_pack_size = pcap_packets[0].original_len;
+
+    uint32_t bytes1_no = 0;
+    uint32_t bytes2_no = 0;
+    uint32_t bytes3_no = 0;
+    uint32_t bytes4_no = 0;
+    uint32_t bytes5_no = 0;
+    uint32_t bytes6_no = 0;
+
+    port_stat_t *most_active_ports;
+    host_stat_t *most_active_hosts;
+
+    uint32_t fragmented_no = 0;
+
+    for(uint32_t i = 0; i < pcap_header_data.packet_no; i++){
+        // tcp and udp data stuff
+        switch(pcap_packets[i].final_data->protocol_type){
+            case 6:
+                tcp_packet_no++;
+                switch(pcap_packets[i].final_data->tcp_flags){
+                    case 0x01:fin_tcp_no++; break;
+                    case 0x02: syn_tcp_no++; break;
+                    case 0x04: rst_tcp_no++; break;
+                    case 0x08: psh_tcp_no++; break;
+                    case 0x10: ack_tcp_no++; break;
+                    default: break;}
+                avg_tcp_sz += pcap_packets[i].final_data->tcp_payload_len;
+                break;
+            case 17:
+                udp_packet_no++; 
+                avg_udp_sz += pcap_packets[i].final_data->tcp_payload_len;
+                break;
+            default: other_packet_no++; break;
+        } 
+        if(pcap_packets[i].original_len > max_pack_size){
+            max_pack_size = pcap_packets[i].original_len;;
+        }
+        if(pcap_packets[i].original_len < min_pack_size){
+            min_pack_size = pcap_packets[i].original_len;
+        }
+        avg_pack_size += pcap_packets[i].original_len;
+
+        // throughput (dynamic windows)
+        double rel_time = get_packet_time(&pcap_packets[i], pcap_header_data.sec_micro) - t_first;
+        uint32_t bin_idx = (uint32_t)(rel_time / bin_width);
+        if (bin_idx >= num_bins) bin_idx = num_bins - 1;
+        throughput[bin_idx] += (double)pcap_packets[i].original_len;
+
+        // histogram of packet sizes
+        if(pcap_packets[i].original_len < (uint32_t)64){
+            bytes1_no++;
+        }
+        else if(pcap_packets[i].original_len >= (uint32_t)64 && pcap_packets[i].original_len < (uint32_t)256){
+            bytes2_no++;
+        }
+        else if(pcap_packets[i].original_len >= (uint32_t)256 && pcap_packets[i].original_len < (uint32_t)512){
+            bytes3_no++;
+        }
+        else if(pcap_packets[i].original_len >= (uint32_t)512 && pcap_packets[i].original_len < (uint32_t)1024){
+            bytes4_no++;
+        }
+        else if(pcap_packets[i].original_len >= (uint32_t)1024 && pcap_packets[i].original_len < (uint32_t)1518){
+            bytes5_no++;
+        }
+        else if(pcap_packets[i].original_len  >= 1518){
+            bytes6_no++;
+        }
+
+        // counting fragmented packets, maybe an anomaly
+        if(pcap_packets[i].final_data->is_fragmented == true || pcap_packets[i].final_data->frag_offset > 0) fragmented_no++;
+
+
+    }
+
+    if(tcp_packet_no != 0) avg_tcp_sz /= tcp_packet_no;
+    else avg_tcp_sz = 0;
+    if(udp_packet_no != 0) avg_udp_sz /= udp_packet_no;
+    else avg_udp_sz = 0;
+    avg_pack_size /= pcap_header_data.packet_no;
+
+    for (uint32_t b = 0; b < num_bins; b++) {
+        throughput[b] = (uint64_t)((double)throughput[b] / bin_width) / 1024.0;
+    }
+
+    generate_protocol_type_chart("images/tcp_v_udp.png", tcp_packet_no, udp_packet_no, other_packet_no);
+    generate_throughput_chart("images/throughput.png", bin_times, throughput, pcap_header_data.packet_no);
+    generate_size_chart("images/histogram.png", bytes1_no, bytes2_no, bytes3_no, bytes4_no, bytes5_no, bytes6_no);
+
+    fclose(pcap_file);
+
+    for(uint32_t i = 0; i < pcap_header_data.packet_no; i++){
+        free(pcap_packets[i].raw_data);
+        free(pcap_packets[i].final_data);
     }
 
     free(pcap_packets);
     free(pcap_filename);
     free(output_filename);
-    free(image_fodler_name);
-    fclose(pcap_file);
+    free(bin_times);
+    free(throughput);
 
     return 0;
 }

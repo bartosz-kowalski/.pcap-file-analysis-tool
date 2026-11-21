@@ -3,7 +3,7 @@ CFLAGS = -O2 -Iinclude -g -Wall -Wextra
 
 TARGET = build/program
 
-SRC = src/main.c src/header_parser.c src/packet_parser.c
+SRC = src/main.c src/header_parser.c src/packet_parser.c src/ip_parser.c src/plotting.c src/utils.c
 OBJ = $(SRC:src/%.c=build/%.o)
 
 all: $(TARGET)
@@ -13,6 +13,7 @@ $(TARGET): $(OBJ)
 
 build/%.o: src/%.c 
 	@mkdir -p build
+	@mkdir -p images
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:

@@ -4,8 +4,8 @@ int is_header_valid(FILE *pcap_file, header_data *data){
 
     uint32_t file_data;
     uint32_t magic_no_data;
-    uint8_t fcs_data;
     uint16_t link_data;
+    uint32_t network_field;
     size_t elements_read;
 
     // Reading the magic number
@@ -13,9 +13,19 @@ int is_header_valid(FILE *pcap_file, header_data *data){
     CHECK_READ_HEADER(elements_read, 1, pcap_file);
     if(magic_no_data == 0xA1B2C3D4){
         data->sec_micro = true;
+        data->endianness = false;
     }
-    else if(magic_no_data== 0xA1B23C4D){
+    else if(magic_no_data == 0xA1B23C4D){
         data->sec_micro = false;
+        data->endianness = false;
+    }
+    else if(magic_no_data == __builtin_bswap32(0xA1B2C3D4)){
+        data->sec_micro = true;
+        data->endianness = true;
+    }
+    else if(magic_no_data == __builtin_bswap32(0xA1B23C4D)){
+        data->sec_micro = false;
+        data->endianness = true;
     }
     else{
         perror("Invalid header! Magic number invalid! \n");
@@ -26,6 +36,12 @@ int is_header_valid(FILE *pcap_file, header_data *data){
     for(int i = 0; i < 2; i++){
         elements_read = fread(&link_data, 2, 1, pcap_file);
         CHECK_READ_HEADER(elements_read, 1, pcap_file);
+
+        if(data->endianness){
+            // changing endianness if needed
+            link_data = __builtin_bswap16(link_data);
+        }
+
         if(link_data == 2 && i == 0){
             continue;
         }
@@ -48,28 +64,29 @@ int is_header_valid(FILE *pcap_file, header_data *data){
     // Reading the SnapLen
     elements_read = fread(&file_data, 4, 1, pcap_file);
     CHECK_READ_HEADER(elements_read, 1, pcap_file);
+    if(data->endianness){
+        // changing endianness if needed
+        file_data = __builtin_bswap32(file_data);
+    }
     data->SnapLen = file_data;
 
-    // Reading the FCS and skipping unused bits
-    elements_read = fread(&fcs_data, 1, 1, pcap_file);
+    // reading all 4 bytes of linktype and fcs
+    elements_read = fread(&network_field, 4, 1, pcap_file);
     CHECK_READ_HEADER(elements_read, 1, pcap_file);
-    bool F = (fcs_data & 16) != 0;
 
-    if(F){
-        data->FCS = (fcs_data >> 5  & 7) * 2;
+    if (data->endianness) {
+        // changing endianness if needed
+        network_field = __builtin_bswap32(network_field);
     }
-    else{
+
+    data->LinkType = network_field & 0xFFFF;
+
+    bool F = (network_field & (1U << 28)) != 0;
+    if (F) {
+        data->FCS = ((network_field >> 29) & 0x07) * 2;
+    } else {
         data->FCS = 0;
     }
-
-    // Skipiing unused byte
-    elements_read = fread(&fcs_data, 1, 1, pcap_file);
-    CHECK_READ_HEADER(elements_read, 1, pcap_file);
-
-    // Determining the link type
-    elements_read = fread(&link_data, 2, 1, pcap_file);
-    CHECK_READ_HEADER(elements_read, 1, pcap_file);
-    data->LinkType = link_data;
 
     printf("Header of the file parsed correctly! \n");
 
@@ -103,6 +120,10 @@ int check_packet_no(FILE *pcap_file, header_data *data){
         }
 
         elements_read = fread(&captured_len, 4, 1, pcap_file);
+        if(data->endianness == true){
+            // changing endianness if needed
+            captured_len = __builtin_bswap32(captured_len);
+        }
         if (elements_read != 1) {
             perror("Reached an unexpected EOF in the captured length! \n");
             return -1;
