@@ -140,6 +140,9 @@ int main(int argc, char **argv){
                     case 0x04: rst_tcp_no++; break;
                     case 0x08: psh_tcp_no++; break;
                     case 0x10: ack_tcp_no++; break;
+                    case 0x11: fin_tcp_no++; ack_tcp_no++; break;
+                    case 0x12: syn_tcp_no++; ack_tcp_no++; break;
+                    case 0x18: psh_tcp_no++; ack_tcp_no++; break;
                     default: break;}
                 avg_tcp_sz += pcap_packets[i].final_data->tcp_payload_len;
                 break;
