@@ -14,7 +14,6 @@ int main(int argc, char **argv){
     /*
     The first argument must be the filename (incl. the extension)
     The second one may be the name of the output file
-    The third one may be the image folder name
     Names MUST NOT contain spaces or any special characters
     */
 
