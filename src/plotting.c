@@ -4,12 +4,15 @@ int generate_throughput_chart(const char *output_png, const double *times, const
     if (count == 0) return -1;
 
     FILE *gp = popen("gnuplot", "w");
-    if (gp == NULL) return -1;
+    if (gp == NULL) {
+        perror("Gnuplot couldnt be started");
+        return -1;
+    }
 
     fprintf(gp, "set terminal pngcairo size 900,500 enhanced font 'Sans,11'\n");
     fprintf(gp, "set output '%s'\n", output_png);
     fprintf(gp, "set title 'Przepustowosc ruchu sieciowego w czasie'\n");
-    fprintf(gp, "set xlabel 'Czas od poczatku przechwytywania [ms]'\n");
+    fprintf(gp, "set xlabel 'Czas od poczatku przechwytywania [s]'\n");
     fprintf(gp, "set ylabel 'Przepustowosc [KB/s]'\n");
     fprintf(gp, "set grid xtics ytics lw 1 lc rgb '#dddddd'\n");
     fprintf(gp, "set yrange [0:*]\n");

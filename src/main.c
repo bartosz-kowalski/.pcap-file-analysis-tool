@@ -103,6 +103,7 @@ int main(int argc, char **argv){
     double t_first = get_packet_time(&pcap_packets[0], pcap_header_data.sec_micro);
     double t_last  = get_packet_time(&pcap_packets[pcap_header_data.packet_no - 1], pcap_header_data.sec_micro);
     double total_duration = t_last - t_first;
+    printf("Czas trwania: %.6f s (t_first=%.6f, t_last=%.6f)\n", total_duration, t_first, t_last);
     if (total_duration <= 0.0) total_duration = 1e-6;
     uint32_t num_bins = pcap_header_data.packet_no / 3;
     if (num_bins < 10) num_bins = 10;
@@ -200,7 +201,7 @@ int main(int argc, char **argv){
     }
 
     generate_protocol_type_chart("images/tcp_v_udp.png", tcp_packet_no, udp_packet_no, other_packet_no);
-    generate_throughput_chart("images/throughput.png", bin_times, throughput, pcap_header_data.packet_no);
+    generate_throughput_chart("images/throughput.png", bin_times, throughput, num_bins);
     generate_size_chart("images/histogram.png", bytes1_no, bytes2_no, bytes3_no, bytes4_no, bytes5_no, bytes6_no);
 
     fclose(pcap_file);
